@@ -1,0 +1,279 @@
+---
+title: 'TP2: Estadística Descriptiva'
+author: "Giansiracusa, Magali"
+output: html_notebook
+---
+
+
+```{r}
+
+datos <- read.csv('./ar_properties.csv', stringsAsFactors = FALSE)
+condiciones <- (datos$l3 == "Boedo"|
+               datos$l3 == "Colegiales"|
+               datos$l3 == "Centro / Microcentro"|
+               datos$l3 == "Mataderos"|
+               datos$l3 == "Puerto Madero")& !is.na(datos$l3)
+datos <- datos[condiciones,]
+```
+
+# Tamaño de las propiedades
+Muestro la cantidad de propiedades en cada barrio
+
+```{r}
+#cantidad en Boedo
+sum(datos$l3 == "Boedo")
+#cantidad en Colegiales
+sum(datos$l3 == "Colegiales")
+#cantidad en Microcentro
+sum(datos$l3 == "Centro / Microcentro")
+#cantidad en Mataderos
+sum(datos$l3 == "Mataderos")
+#cantidad en Puerto Madero
+sum(datos$l3 == "Puerto Madero")
+
+```
+
+Eliminar los datos faltantes:
+
+```{r}
+any(is.na(datos$surface_total))
+any(is.na(datos$surface_covered))
+any(is.na(datos$rooms))
+# se puede notar que en los tres casos hay datos vacíos
+
+#los NA son los valores que queremos eliminar del dataframe
+#para eso reescribo datos
+datos<-datos[!is.na(datos$surface_total)& !is.na(datos$surface_covered)& !is.na(datos$rooms),]
+```
+```{r}
+#voy a definir mi vector barrios en donde pondré el listado de 
+#barrios con los que trabaja la consigna para facilitar el análisis en el
+#resto de los enunciados
+barrios<- c("Boedo","Colegiales","Centro / Microcentro", "Mataderos", "Puerto Madero")
+grupos<- lapply(barrios, function(b){
+  return(datos[datos$l3 == b,])
+})
+par(mfrow=c(3,2))
+#el cálculo de los percentiles lo realicé para mejorar la lectura del gráfico
+#podando los casos muy grandes o muy pequeños
+#el for irá recorriendo a grupos trabajando con la superficie total, le hará el filtro con los percentiles y luego
+#cada posición de grupos será graficada en un histograma
+for(i in 1:5){
+  sup<- grupos[[i]]$surface_total
+  percentiles<- quantile(sup, probs = c(0.01,0.99))
+  sup<- Filter(function(x){
+    return(x > percentiles[1]& x< percentiles[2])
+  }, sup)
+  hist(sup,breaks= length(sup)/100, main = barrios[i],xlab = "Superficie Total (m2)",ylab="Frecuencia")
+}
+par(mfrow=c(3,2))
+#para el caso de las habitaciones, no será necesario filtrar con percentiles
+for(i in 1:5){
+  habitacion<- grupos[[i]]$rooms
+  barplot(table(habitacion), main = barrios[i],xlab = "Num de habitaciones",ylab="Frecuencia")
+}
+
+
+```
+En el segundo gráfico se puede notar que en todos los barrios mayormente la cantidad de habitaciones varían entre 2 y 4.
+En el Microcentro hay más cantidad de propiedades pequeñas, debido a que pueden ser pequeñas oficinas o viviendas para una sola persona, mientras que en puerto madero la mayoría tiene más habitaciones, dando lugar a propiedades más grandes, pudienso ser oficinas o viviendas mas "lujosas"
+los datos con muchas habitaciones pueden ser debido a las cocheras o a un edificio entero de oficinas.
+En el primer gráfico se puede realizar un pensamiento analógico con el de las habitaciones, lo que tiene sentido ya que la cantidad de superficie total en la mayoria de los datos puede reflejar también la cantidad de habitaciones que puede tener la propiedad.
+
+```{r}
+#tomo como superficie del enunciado a superficie total unicamente y sigo con este criterio durante el resto del trabajo.
+caracteristicas<- lapply(grupos, function(b){
+  resultado <- c(
+    mean(b$surface_total), 
+    sd(b$surface_total), 
+    median(b$surface_total), 
+    quantile(b$surface_total,c(0.25,0.75))
+  )
+})
+
+caracteristicas <- as.data.frame(do.call(rbind,caracteristicas))
+colnames(caracteristicas) <- c('Promedio', 'Desvío estándar', 'Mediana', 'Primer cuartil', 'Tercer cuartil')
+rownames(caracteristicas) <- c("Boedo","Colegiales", "Centro", "Mataderos", "Puerto Madero")
+caracteristicas
+
+
+```
+a) El promedio en comparación con la mediana es mayor, esto quiere decir que la distribución de los datos no es uniforme
+```{r}
+#busco el rango para ver entre que valores varían
+range(datos$surface_total)
+
+```
+b) la propiedad más chica es de 10 m2 (corresponden a una oficina y a una cochera), mientras que la propiedad más grande es de 7971 m2
+```{r}
+#busco en datos que nombre de l3 se corresponde con el valor máximo de superficie
+datos[datos$surface_total == max(datos$surface_total),]$l3
+```
+c) La propiedad de superficie más grande está en Puerto Madero, lo que vuelve a confirmar lo analizado en el punto anterior con los gráficos de habitaciones/ superficies
+d) Por el desvío estandard se puede ver que la mayor variación se encuentra en el
+Microcentro
+
+```{r}
+boxplot(datos$surface_total ~ datos$l3, outline = F,par(cex.axis= 0.7),xlab = "Barrios", ylab = "Superficie",main = "Gráfico de superficies según los barrios")
+
+boxplot(datos$rooms ~ datos$l3, outline = F,par(cex.axis= 0.7),xlab = "Barrios", ylab = "Habitaciones", main = "Gráfico de habitaciones según los barrios")
+
+```
+```{r}
+#5) Para explorar el tamaño de la habitación promedio, voy a mostrar las características de todo el conjunto
+tamanio_habitacion <- lapply(barrios, function(b){
+  habitacion_barrio <- (datos[datos$l3 == b,]$surface_covered / datos[datos$l3 == b,]$rooms)
+  return(summary(habitacion_barrio))
+})
+
+tabla <- as.data.frame(do.call(rbind, tamanio_habitacion))
+rownames(tabla) <- barrios
+colnames(tabla) <- c("Mínimo","Primer Cuartil", "Mediana", "Promedio", "Tercer Cuartil", "Máximo")
+tabla
+
+```
+# Relación entre el precio y las características de una propiedad
+```{r}
+datosUSD <- datos[datos$currency == "USD" & !is.na(datos$currency),]
+```
+```{r}
+#hay fondos que dan negativos, por lo que voy a eliminarlos
+datosUSD <- datosUSD[datosUSD$surface_covered <= datosUSD$surface_total,]
+fondo <- datosUSD$surface_total - datosUSD$surface_covered
+
+```
+### Superficie Total y precio
+
+```{r}
+
+colores <- rainbow(length(barrios))
+names(colores) <- barrios 
+percentiles <- quantile(datosUSD$surface_total, probs = c(0.01,0.99))
+plot(datosUSD$surface_total,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$l3],xlab = "Superficie Total", ylab = "Precio", main = "Gráfico precio propiedad en función de la superficie total" )
+legend("topright",legend = barrios, col = colores, pch = 1 )
+```
+En este gráfico se puede notar que, en primer lugar, debido a que no separé dentro de los datos los alquileres de las ventas, hay valores (mayormente en Puerto Madero) que aunque aumente la superficie el precio siga bajo, dichos son los alquileres, o de oficinas 
+Por otro lado, los precios son mucho más elevados en Puerto Madero que en el resto y el aumento de superficie en dicho barrio es de una forma "exponencial" para el precio.
+En el resto de los barrios, no se ve una diferencia tan notoria entre la superficie y el precio como sucede en puerto madero, esto puede ser debido al tipo de propiedad que hay en esos barrios, dicho gráfico se analizará más adelante en el trabajo.
+
+```{r}
+plot(datosUSD$surface_total,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$l3], log = "xy" , xlab = "Superficie Total", ylab = "Precio", main = "Gráfico precio propiedad en función de la superficie total escala logarítmica")
+legend("bottomright",legend = barrios, col = colores, pch = 1 )
+```
+
+### Superficie cubierta y precio
+```{r}
+colores <- rainbow(length(barrios))
+names(colores) <- barrios 
+percentiles <- quantile(datosUSD$surface_covered, probs = c(0.01,0.99))
+plot(datosUSD$surface_covered,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$l3],xlab = "Superficie Cubierta", ylab = "Precio",main = "Gráfico precio propiedad en función de la superficie cubierta" )
+legend("topright",legend = barrios, col = colores, pch = 1 )
+```
+En este gráfico se puede hacer un análisis similar al de Superficie Total.
+```{r}
+plot(datosUSD$surface_covered,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$l3], log = "xy" , xlab = "Superficie Cubierta", ylab = "Precio", main = "Gráfico precio propiedad en función de la superficie cubierta escala logarítmica")
+legend("bottomright",legend = barrios, col = colores, pch = 1 )
+```
+### Fondo y precio
+
+```{r}
+colores <- rainbow(length(barrios))
+names(colores) <- barrios 
+percentiles <- quantile(fondo, probs = c(0.01,0.99))
+plot(fondo,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$l3],xlab = "Fondo", ylab = "Precio" , main = "Gráfico precio propiedad en función del fondo")
+legend("topright",legend = barrios, col = colores, pch = 1 )
+```
+
+En el caso del fondo, hay valores que no pueden ser vistos en escala logarítmica, por lo que omito este gráfico, tampoco parece haber una correlación muy clara entre los datos.
+### Tamaño promedio habiatación y precio
+
+```{r}
+tamanio_habitacion <- datosUSD$surface_covered / datosUSD$rooms
+colores <- rainbow(length(barrios))
+names(colores) <- barrios 
+percentiles <- quantile(tamanio_habitacion, probs = c(0.01,0.99))
+plot(tamanio_habitacion,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$l3],xlab = "Tamaño habitación", ylab = "Precio", main = "Gráfico precio propiedad en función de habitación" )
+legend("topright",legend = barrios, col = colores, pch = 1 )
+```
+En este gráfico nuevamente se puede observar que, en Puerto Madero el tamaño de la habitación promedio hace un gran cambio en el precio, mientras que en el resto se mantiene bastante costante, debido al tipo de propiedad que debe haber en dicha zona (departamentos pequeños, casas, oficinas) 
+```{r}
+tamanio_habitacion <- datosUSD$surface_covered / datosUSD$rooms
+plot(tamanio_habitacion,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$l3], log = "xy" , xlab = "Tamaño habitación", ylab = "Precio", main = "Gráfico precio propiedad en función de la habitación escala logarítmica")
+legend("bottomright",legend = barrios, col = colores, pch = 1 )
+
+```
+Para concluir, se puede notar que en todos los gráficos, exceptuando el del fondo que no tiene mucha correlación, se ve un comportamiento similar sin impotar la variable, lo que da a entender que las variables analizadas tienen una gran correlación entre si. Los comportamientos son análogos a los que mencioné en el análisis de cada gráfico puntual.
+Precio en función del tipo de propiedad
+
+```{r}
+#voy a realizar un summary con los datos de propiedad
+tipo_propiedad <- unique(datosUSD$property_type)
+propiedades <-lapply(tipo_propiedad, function(p){
+  return(summary(datosUSD[datosUSD$property_type == p,]$price))
+})
+#Para visualizar los datos voy a realizar 2 tablas
+propiedades <- as.data.frame(do.call(rbind,propiedades))
+colnames(propiedades) <- c('Mínimo', 'Primer Cuartil', 'Mediana', "Promedio" , 'Tercer Cuarti', "Máximo")
+rownames(propiedades) <- tipo_propiedad
+propiedades
+
+propiedad_en_barrio <- lapply(barrios, function(n){
+  b <- datosUSD[datosUSD$l3 == n, ]$property_type
+  return(c(
+    sum(b == "Departamento"),
+    sum(b == "PH"),
+    sum(b == "Casa"),
+    sum(b == "Oficina"),
+    sum(b == "Otro"),
+    sum(b == "Local comercial"),
+    sum(b == "Cochera"),
+    sum(b == "Depósito"),
+    sum(b == "Lote")
+  ))
+})
+tabla <- as.data.frame(do.call(rbind, propiedad_en_barrio))
+rownames(tabla) <- barrios
+colnames(tabla) <- tipo_propiedad
+tabla
+```
+```{r}
+#en esta tabla voy a ver los precios
+propiedad_en_barrio <- lapply(barrios, function(n){
+  b <- datosUSD[datosUSD$l3 == n, ]
+  return(c(
+    mean(b[b$property_type == "Departamento",]$price),
+    mean(b[b$property_type == "PH",]$price),
+    mean(b[b$property_type == "Casa",]$price),
+    mean(b[b$property_type == "Oficina",]$price),
+    mean(b[b$property_type == "Otro",]$price),
+    mean(b[b$property_type == "Local comercial",]$price),
+    mean(b[b$property_type == "Cochera",]$price),
+    mean(b[b$property_type == "Depósito",]$price),
+    mean(b[b$property_type == "Lote",]$price)
+  ))
+})
+tabla <- as.data.frame(do.call(rbind, propiedad_en_barrio))
+rownames(tabla) <- barrios
+colnames(tabla) <- tipo_propiedad
+tabla
+```
+En esta última tabla, los valores NaN corresponden a que no hay ningun numero de ese tipo de propiedad en el barrio, por lo que al hacer el promedio lo divide por cero.
+
+```{r}
+
+colores <- rainbow(start = 0.3, end = 0.2, length(tipo_propiedad))
+names(colores) <- tipo_propiedad
+percentiles <- quantile(datosUSD$surface_total, probs = c(0.01,0.99))
+plot(datosUSD$surface_total,datosUSD$price, xlim = c(percentiles[1], percentiles[2]),col = colores[datosUSD$property_type],xlab = "Superficie Total", ylab = "Precio", main = "Gráfico precio propiedad en función de la superficie para distintos tipos de propiedades" )
+legend("topright",legend = tipo_propiedad, col = colores, pch = 1 )
+
+```
+Se puede notar una diferencia teniendo en cuenta el tipo de propiedad. Se nota que los departamentos difieren mucho cuánto más grandes son mayor el precio, mientras que en las casas esto no sucede. Esto puede ser debido a que el tamaño de las casas ya es grande y aunque aumente el precio no haga la diferencia, mientras que en un departamento con superficie más acotada, agrandar los ambientes hace una gran diferencia. (notar que apriori en el punto anterior, mirando los barrios ya se podía dar a cuenta que dependía del tipo de propiedad el precio)
+Al igual que en el otro grádfico, se pueden notar departamentos con un precio muy bajo, eso es debido a que no diferencie entre alquileres y ventas
+
+
+# Conclusiones
+
+En este trabajo, a nivel de análisis de datos, logré ver que se puede visualizar una misma correlación de distintas maneras, mediante distintos gráficos o trablas, y cada manera puede identificar una propiedad o característica en particular que logra que se pueda hacer un mejor estudio de los datos. Esto sucede también en el caso de visualizar con colores, y los distintos tipos (como en el caso de la comparación entre los gráficos del precio y superficie, uno con los barrios y otro con el tipo de propiedad)
+Por otro lado, a nivel del dataset, se pudo observar con claridad la diferencia que hay entre los barrios seleccionados (algunos con más tendencia a vivienda familiar, otros a oficinas y cocheras y otros a viviendas individuales), y poder ver que cada uno va tomando un comportamiento distinto, pero que dicho comportamiento se mantiene a medida que lo vas analizando desde distintas variables, lo que hace notar que las variables analizadas en el dataset tienen una correlación, lo que tiene sentido ya que en su mayoría refiere al tamaño de la superficie, al tamañp de una habitación o a la cantidad de habitaciones.
+

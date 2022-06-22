@@ -1,0 +1,361 @@
+---
+title: "TP3: Modelado lineal"
+author: "Magali Giansiracusa"
+output: html_notebook
+---
+
+
+## Carga de datos
+```{r}
+datos <- read.csv("./datos_alquiler.csv", stringsAsFactors = F)
+datos$start_date <- as.Date(datos$start_date)
+```
+
+## Punto 1
+
+```{r}
+colores <- rainbow(length(unique(datos$property_type)))
+names(colores)<- unique(datos$property_type)
+plot(
+  datos$surface_total,
+  datos$price,
+  col = colores[datos$property_type],
+  main = "Pecio en función de la superficie total",
+  xlab = "Superficie Total(m2)",
+  ylab = "Precio ($)"
+)
+legend("topleft", legend = unique(datos$property_type), col = colores, pch = 1)
+```
+
+En este gráfico se puede notar una gran correlación entre la superficie y el precio.
+El dataset está muy desbalanceado (esto se va a repetir a lo largo del todo el trabajo), habiendo muchos departamentos y pocos PH y casas.
+Es por esta razón, que cuando los departamentos tienen más superficie, el salto de precio es mayor a los que tienen menos m2. Esto es debido a que, en este tipo de propiedad que suele ser más chica(esto no sucede con las casas por ejemplo), una superficie muy amplia marcaría una especie de "lujo", lo que hace que el precio aumente.
+Con los PH sucede algo similar, aunque hay valores con una superficie total muy amplia que no tiene precios muy elevados. Esto puede ser debido a que en estos casos haya otra variable que esté afectando el precio que no tenga que ver con la superficie, por ejemplo, la ubicación
+Por último, las casas presentan un crecimiento bastante uniforme entre la superficie y el precio
+```{r}
+barplot(
+  table(datos$rooms),
+  main = "Distribución de cantidad de habitaciones",
+  xlab = "Habitaciones",
+  ylab = "cantidad"
+)
+```
+En este gráfico, nuevamente se nota el desbalance de los datos, ya que 2 habitaciones, lo que pareciera un número acorde para un departamento, es lo que más cantidad presenta.
+
+```{r}
+barplot(table(format(datos$start_date, format = ' %d')),
+  cex.names = 0.7,
+  main = "Cantidad publicada según día del mes",
+  ylab = "Cantidad",
+  xlab = "Día"
+
+)
+```
+Este gráfico está mostrando una distribución normal, presenta algunos picos más altos, pero éstos corresponden a los outliers.
+
+
+```{r}
+
+datos<-datos[!is.na(datos$surface_total)& !is.na(datos$surface_covered)& !is.na(datos$rooms),]
+tamanio_habitacion <- datos$surface_covered / datos$rooms
+colores <- rainbow(length(unique(datos$property_type)))
+names(colores)<- unique(datos$property_type)
+percentiles <- quantile(tamanio_habitacion, probs = c(0.01,0.99))
+plot(
+  tamanio_habitacion,
+  datos$price,
+  xlim = c(percentiles[1], percentiles[2]),
+  col = colores[datos$property_type],
+  xlab = "Tamaño habitación(m2)",
+  ylab = "Precio",
+  main = "Precio en función de tamaño de habitación",
+  log = "xy"
+)
+legend("topright",legend = unique(datos$property_type), col = colores, pch = 1 )
+```
+No parece haber una correlación entre el tamaño de la habitación con el precio para los departamentos, pero para las casas y los PH se nota un poco el aumento del precio según el tamaño de habitación.
+
+
+```{r}
+ordenado <- table(weekdays(datos$start_date))
+barplot(ordenado[c("lunes","martes","miércoles","jueves","viernes","sábado","domingo")],
+    main = "Cantidad publicada según día de semana",
+    ylab = "Cantidad publicada",
+    xlab = "Día"
+)
+
+
+```
+La mayor cantidad se presenta al final de la semana, mientras que la menor se presenta el domingo, lo que tiene sentido ya que, al ser domingo, hay menos trabajo por lo que las publicaciones pueden pasar para otro día, o bien, el trabajo se realiza antes del fin de semana, en donde suele haber más búsqueda de propiedades.
+
+## Punto 2
+```{r}
+modelo1<- lm(datos$price ~ 1)
+plot(
+  datos$price,
+  col = "blue",
+  main = "Precio según modelo constante",
+  ylab = "Precio",
+  xlab = "Índice"
+)
+abline(modelo1, col = "red",lwd = 2)
+legend("topright",legend = paste("Constante del modelo:", round(modelo1$coefficients, 0)), pch = "-", col = "red")
+
+```
+No se ve un patrón
+
+## Punto 3
+```{r}
+percentiles_cubierta <- quantile(datos$surface_covered, probs = c(0.01,0.99))
+colores <- rainbow(length(unique(datos$property_type)))
+names(colores)<- unique(datos$property_type)
+plot(
+  datos$surface_covered,
+  datos$price,
+  main = "Precio en relación a la Superficie cubierta",
+  xlab = "Superficie (m2)",
+  ylab = "Precio ($)",
+  xlim = c(percentiles_cubierta[1],percentiles_cubierta[2]),
+  col = colores[datos$property_type],
+  pch = 4,
+  log = "xy"
+)
+legend("topleft", legend = unique(datos$property_type), col = colores, pch = 4)
+```
+El dataset está desbalanceado entre departamentos, casas y PH, lo que dificulta ver con claridad al seprar el tipo de propiedad. Por esa razón, no creo que sea correcto hacer un análisis de comparación entre los tipos, aunque los 3 parecieran tener el mismo comportamiento.
+En el gráfico se puede notar una correlación entre la superficie cubierta y precio, ya que en proporción, cuando aumenta una la otra también lo hace. 
+Con respecto a los departamentos, que corresponden al color rojo, se puede notar que hay muy pocos puntos en donde el color es intenso (lo que significa que para una misma superficie, se le corresponde un mismo precio), lo que significa que para una misma superficie, hay un rango de precios distintos, y dicho rango pareciera ir aumentando a medida que aumenta la superficie.
+
+```{r}
+percentiles_fondo <- quantile(datos$fondo, probs = c(0.01,0.99))
+plot(
+  datos$fondo,
+  datos$price,
+  main = "Precio en función al fondo",
+  xlab = "Superficie de fondo (m2)",
+  ylab = "Precio ($)",
+  xlim = c(percentiles_fondo[1],percentiles_fondo[2]),
+  col = colores[datos$property_type],
+)
+legend("topright", legend = unique(datos$property_type), col = colores, pch = 1)
+
+```
+Se puede notar que las propiedades que no presentan fondos tienen distintos precios, por lo que en estos casos, el precio varía por otros factores, por lo que las propiedades caras no son necesariamente debidas al fondo.
+Por otro lado, hay una gran cantidad de propiedades con poco fondo, esto es debido a que en su gran mayoria son departamentos, y en estos valores se nota que hay una correlación entre el aumento del fondo y el precio.
+Para los PH no pareciera haber una correlación clara, pero en las casas si pareciera haber una correlación (aunque no es muy notoria ya que hay datos que no se corresponden con el aumento del precio). Igualmente, en el caso de las casas, al haber pocos datos, no se puede visualizar de manera óptima.
+```{r}
+plot(
+  datos$price ~ datos$start_date,
+  main = "Precio según la fecha",
+  xlab = "Fecha",
+  ylab = "Precio ($)"
+)
+
+```
+No se puede notar una correlacion CUALITATIVA entre el precio y la fecha de publicación
+(más adelante en el trabajo se analizará de manera cuantitativa)
+
+## Punto 4
+```{r}
+
+modelo2 <- lm(datos$price ~ datos$surface_covered)
+plot(
+  datos$surface_covered, 
+  datos$price, 
+  main = "Precio en función de la Superficie cubierta",
+  xlab = "Superficie (m2)",
+  ylab = "Precio ($)"
+)
+abline(modelo2, col = "purple", lwd = 2)
+legend ("topleft", legend = "Modelo precio en base a Sup cubierta", col = "purple", lwd = 2)
+```
+En este caso no separé por tipo de propiedad ya que al modelo realizado no tiene en cuenta este parámetro.
+Se puede observar que el modelo ajusta bien a los datos cuando la superficie es más pequeña ya que la mayoría de los datos están concentrados y cerca de la línea violeta. Pero, a medida que la superficie aumenta, los datos empiezan a diferir.
+```{r}
+predicciones_modelo2 <- predict(modelo2)
+plot(datos$price,
+  predicciones_modelo2,
+  main = "Valores predichos en función de valores observados",
+  xlab = "Precio",
+  ylab = "Predicciones"
+)
+abline(0,1, col = "purple", lwd = 2)
+legend("topleft", legend = "Función Indetidad", col = "Purple", lwd = 2)
+```
+En este caso, la recta utilizada fue de la función identidad, ya que es la que corresponde en todos los casos el mismo valor en xy. Es una simple guía para ver que tanto del ideal los datos se alejan
+Se puede notar que, aunque no está del todo centrada en los valores, en las propiedades de menor precio se acercan más a la identidad, pero a medida que aumentan (hay menor cantidad de datos) se van distanciando.
+
+```{r}
+#análisis de los residuos
+summary(modelo2)
+plot(modelo2$residuals,
+     main = "Residuos del modelo",
+     ylab = "Residuos",
+     xlab = "Índice"
+)
+summary(modelo2$residuals)
+```
+haciendo el summary del modelo, el valor del r cuadrado es de 0.6, siendo un número "elevado" para estar teniendo en cuenta solo un parámetro que afecta al precio, esto va a notarse más en el último punto del trabajo.
+En el grafico de los residuos no se ve un patrón.
+
+
+## Punto 5
+```{r}
+modelo4 <- lm(price ~ start_date, data = datos)
+summary(modelo4)
+plot(datos$price ~ datos$start_date, main = "Evolución del precio en función del tiempo",
+     xlab = "Fecha",
+     ylab = "Precio ($)")
+abline(modelo4, col = "purple", lwd = 2)
+legend("topright", legend = "modelo", col = "purple", pch = "-") 
+start_date <- paste("01", 1:12, "2019",sep = "/")
+start_date <- as.Date(start_date, format = "%d/%m/%Y")
+meses <- c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre")
+predicciones <-predict(modelo4, newdata = start_date)
+names(predicciones) <- meses 
+predicciones
+```
+Se puede notar que el modelo 4 tiene una pendiente de 3.223, marcando que hay un aumento del precio a medida que pasa el tiempo debido posiblemente a la inflación. Lo mismo se puede ver cuantitativamente en la tabla con los distintos meses.
+
+## Punto 6
+```{r}
+modelo5 <- lm(datos$price ~ datos$property_type)
+modelo5
+boxplot(
+  datos$price ~ datos$property_type,
+  main = "Precio en función de tipo de propiedad",
+  xlab = "Tipo de propiedad",
+  ylab = "Precio",
+  outline = FALSE 
+)
+promedios <- tapply(datos$price,datos$property_type,mean)
+points(promedios,col="purple",pch=1)
+legend("topright", legend = "Media", col= "purple", pch = 1)
+```
+En el boxplot se puede notar que en los 3 casos la mediana está bastante centrada (en el departamento no es tan así). En los departamenos había muchos outliers, por lo que decidí sacarlos, pero igualmente presenta una asimetría a derecha, al igual que en los otros dos casos, por lo que tiene sentido que la media esté por arriba de la mediana. Esto significa que Los datos se concentran en la parte inferior de la distribución, dejando en la parte superior datos más dispersos.
+
+
+
+```{r}
+predicciones_modelo5 <- predict(modelo5)
+plot(
+  datos$price,
+  predicciones_modelo5,
+  main = "Valores predichos en función de los valores
+  observados",
+  col = colores[datos$property_type],
+)
+legend("topright", legend = unique(datos$property_type), col = colores, pch = 1)
+
+```
+
+
+los coeficientes son la media de cada tipo de propiedad.
+En la variable de tipo de propiedad, no se encuentra un valor númerico, sino que la interpreta como un está o un no está (1 y 0), por lo que en la fórmula del modelo, la constante se multiplicara por un uno o por un cero.
+
+## Punto 7
+```{r}
+ubicacion <- Pair(datos$lat, datos$lon)
+caracteristicas <- list(datos$fondo, datos$property_type, datos$start_date, ubicacion, datos$rooms, datos$surface_covered)
+r_sq <- matrix(nrow = length(caracteristicas), ncol = length(caracteristicas))
+adj_r_sq <- matrix(nrow = length(caracteristicas), ncol = length(caracteristicas))
+error <- matrix(nrow = length(caracteristicas), ncol = length(caracteristicas))
+for(i in 1:length(caracteristicas)){
+  for(j in 1:length(caracteristicas)){
+    if(i != j){
+      c <- lm(datos$price ~ caracteristicas[[i]] + caracteristicas[[j]])
+      r_sq[i,j] <- summary(c)$r.squared
+      adj_r_sq[i,j] <- summary(c)$adj.r.squared
+      error[i,j] <- summary(c)$sigma
+    } else {
+      r_sq[i,j] <- '-'
+      adj_r_sq[i,j] <- '-'
+      error[i,j] <- NA
+    }
+  }
+} 
+r_sq <- as.data.frame(r_sq)
+nombres <- c("Fondo","Tipo Prop.","Fecha","Ubicacion","Habitaciones","superficie cubierta")
+colnames(r_sq) <- nombres
+rownames(r_sq) <- nombres
+
+
+adj_r_sq <- as.data.frame(adj_r_sq)
+nombres <- c("Fondo","Tipo Prop.","Fecha","Ubicacion","Habitaciones","superficie cubierta")
+colnames(adj_r_sq) <- nombres
+rownames(adj_r_sq) <- nombres
+
+error<- as.data.frame(error)
+nombres <- c("Fondo","Tipo Prop.","Fecha","Ubicacion","Habitaciones","superficie cubierta")
+colnames(error) <- nombres
+rownames(error) <- nombres
+
+r_sq
+adj_r_sq
+error
+
+```
+
+Realicé tres tablas distintas para comparar todos los modelos alternativos del precio que se pueden generar con dos variables. Una de ellas muestra el r cuadrado, la otra el r cuadrado ajustado y la última error de ajuste.
+Con respecto al r cuadrado, todos los valores con 2 variables son muy chicos, en su gran mayoría menores al 0.1 (menos la comparación de ubicación y fondo), exceptuando las comparaciones con las habitaciones, que todas están por encima del 0.4. El aumento del r cuadrado por las habitaciones, puede deberse nuevamente a que los datos son mayormente departametnos, y el precio en un ambiente más reducido cambia al aumentar las habitaciones.
+Al principio del trabajo analicé el precio unicamente con una variable, la de superficice cubierta, y con dicha variable el r cuadrado superaba los 0.6, por lo que decidí agregarla a ambas tablas en este punto ya que me parece que es la variable que más relación trae a este modelo para e♦l precio.
+Siguiendo esta línea de pensamiento, el fondo debería ser también un buen parámetro, pero los resultados marcan todo lo contrario. Esto puede deberse a que el fondo deja de tener tanta importancia, mas que nada porque la mayor parte de los datos son departamentos, y en ese tipo de propiedad no está tan presente el fondo. El r cuadrado del fondo dió alto cuando lo comparamos con la ubicación. Esto puede deberse que en cierta zona, quizás algún barrio con casas grandes, el fondo ya empieza a tener más importancia para el precio.
+El r cuadrado mayor en dos dimensiones se encontró en ubicación + superficie cubierta, lo que tiene sentido porque (ya que la mayoria de los datos en el dataset son departamentos) la superficie y la localidad son muy importantes para el precio. 
+Aunque sea menor que el precio, las habitaciones también son una variable importante ya que resultan tener los r cuadrados más grandes.
+Para el resto de las variables, por lo menos en dos dimensiones, no parecería tener buenos resultados, resultado esperable ya que son combinaciones que están muy "en dependencia" entre sí, no aportando mucha información de más. En estos casos, el modelo no es capaz de poder aumentar su r cuadrado. 
+El r cuadrado ajustado tiene el mismo comportamiento que el anterior, pero con valores un poco más pequeños. Por último, el error de ajuste también muestra un comportamiento que se correlaciona con el aumento del r cuadrado.
+
+```{r}
+modelo3dim1 <- lm(datos$price ~ datos$surface_covered + datos$rooms + datos$lon + datos$lat)
+#Multiple R-squared: 0.6452 ,	Adjusted R-squared: 0.6444
+
+modelo3dim2 <-lm(datos$price ~ datos$surface_covered + datos$start_date + datos$fondo)
+summary (modelo3dim2)
+#Multiple R-squared:  0.6137,	Adjusted R-squared:  0.6131
+
+modelo3dim3 <- lm(datos$price ~ datos$start_date + datos$property_type + datos$lon + datos$lat)
+#Multiple R-squared:  0.09329,	Adjusted R-squared:  0.09096
+
+modelo3dim4 <- lm(datos$price ~ datos$start_date + datos$property_type + datos$fondo)
+#Multiple R-squared:  0.04921,	Adjusted R-squared:  0.04725 
+
+```
+Realicé 4 modelos alternativos con 3 dimensiones, uno con valores que ya me habían dado grandes con dos dimensiones, otro con valores que me habían dado pequeños agregando una variable con mucho r cuadrado, y los otros dos con valores con poco r cuadrado en dos dimensiones agregando una más que individualmente parecería no tener mucha correlación con el precio para el modelo lineal.
+
+En el primer caso, el aumento fue grande. Con solo dos dimensiones, el valor del r cuadrado fue de 0.60455478420136, mientras que, agregando una nueva variable más, su valor pasó a ser 0.6452.
+En el segundo caso, si consideramos que la tercera dim agregada fue la superficie, hubo un aumento muy marcado, lo que tiene totalmente sentido ya que dicha variable aumenta mucho de por si el valor. Pasó de ser 0.0471302417079011 a 0.6137
+En los últimos casos también se notó un aumento (hay que aclarar que dichos aumentos son relativos dependiendo de que variable estamos considerando como el tercer parámetro nuevo, ya que todas las variables tienen pesos distintos). Lo importante es que con todos los valores, cuando se le agregó alguna variable más, aumentó el valor.
+Con esto puedo concluir que, al agregar más variables, siendo muy importante cual agrego también, el valor del r cuadrado aumentará. Por otro lado, con respecto al r cuadrado ajustado, aunque hubo un aumento, éste no fue tan grande como con el r cuadrado.
+
+```{r}
+modelo2dim1 <- lm(datos$price ~ datos$surface_covered + datos$rooms)
+modelo2dim2 <- lm(datos$price ~ datos$surface_covered + datos$start_date)
+modelo2dim3 <- lm(datos$price ~ datos$start_date + datos$property_type )
+modelo2dim4 <- lm(datos$price ~ datos$property_type + datos$lon + datos$lat)
+modelo2dim5 <- lm(datos$price ~ datos$property_type + datos$fondo)
+dimension2 <- c(summary(modelo2dim1)$sigma,
+                summary(modelo2dim2)$sigma,
+                summary(modelo2dim3)$sigma,
+                summary(modelo2dim4)$sigma,
+                summary(modelo2dim5)$sigma
+                )
+dimension3 <- c(summary(modelo3dim1)$sigma,
+                summary(modelo3dim2)$sigma,
+                summary(modelo3dim3)$sigma,
+                summary(modelo3dim4)$sigma
+                )
+boxplot(dimension2,
+        dimension3,
+        main = "Error de modelos según la cantidad de dimensiones",
+        names = c("Dos dimensiones", "Tres dimensiones"))
+
+```
+
+
+
+
+
+
+
+
+

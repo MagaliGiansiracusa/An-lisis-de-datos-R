@@ -1,0 +1,252 @@
+---
+title: "Trabajo práctico 4: Validación Cruzada"
+output: html_notebook
+---
+
+
+## Lectura de datos
+```{r}
+datos <- read.csv("./datos_alquiler_crossvalidation.csv", stringsAsFactors = F)
+```
+
+## Punto 1
+
+```{r}
+MAE <- function(x,y){
+  cantObs <- length(x)
+  terminos <-  mapply(x = x, y = y, FUN = function(x,y){
+    return(abs(x-y)/cantObs)
+  })
+  return(sum(terminos))
+}
+
+```
+
+## Punto 2
+
+```{r}
+PMAE <- function(x,y){
+  sumObs <- sum(x)
+  terminos <-  mapply(x = x, y = y, FUN = function(x,y){
+    return(abs(x-y))
+  })
+  return(sum(terminos)/sumObs)
+}
+
+
+```
+
+## Punto 3
+
+```{r}
+precioSup <- lm(datos$price ~ datos$surface_covered)
+paste("MAE superficie total", round(MAE(datos$price, predict(precioSup)),3))
+paste ("PMAE superficie total",round(PMAE(datos$price, predict(precioSup)),3))
+```
+### Agrego el fondo al modelo 
+```{r}
+precioSupFondo <- lm(datos$price ~ datos$surface_covered + datos$fondo)
+paste("MAE superficie total con fondo", round(MAE(datos$price, predict(precioSupFondo)),3))
+paste ("PMAE superficie total con fondo",round(PMAE(datos$price, predict(precioSupFondo)),3))
+
+```
+En ambos casos, el PMAE y el MAE disminuyeron, aunque en cantidades mínimas, por lo que no se puede registrar una mejora significante.
+
+## Punto 4
+```{r}
+crossval <- function(datos, modelo, n_obs, fun_error, n_muestras = 10){
+  errores <-c()
+  for(i in 1:n_muestras){
+    datosAzar <- sample(nrow(datos), nrow(datos)-n_obs)
+    LM <- lm(formula(modelo), data = datos[datosAzar, ])
+    errores[i] <- fun_error(datos[-datosAzar, as.character(formula(modelo)[[2]])], predict(LM, newdata = datos[-datosAzar,]))
+  }
+  LM <- lm(formula(modelo), data = datos)
+  lista <- list(errores = errores, promedios = mean(errores), varianza =  var(errores), formula = formula(modelo), modelo = LM)
+  return(lista)
+  
+}
+```
+
+## Punto 5
+```{r}
+cv <- crossval(datos, "price ~ surface_covered", 10, PMAE, 1000)
+boxplot(cv$errores,
+        main = "Comportamiento de errores del modelo",
+        ylab = "Error de predicción"
+)
+
+``` 
+Si visualizamos el promedio de los errores de este modelo, toma este valor `r cv$promedios`. Comparándolo con los resultados del PMAE obtenidos en el principio del punto 3, se puede notar que casi no hay una diferencia entre los valores, más aún cuando el numero de muestras es elevado, acota mucho el rango del promedio del error. Con esto se debe notar que, con menos muestras, el modelo tiene un peor funcionamiento.
+El error, al no aumentar considerablemente, da a entender que en este modelo no está presente el concepto de overfitting, ya que haciendo validación cruzada, dicho término se debería ver reflejado en un aumento considerable de las cifras.
+## Punto 6
+```{r}
+n_obs <- seq(1, 100, 5)
+modelos <- list()
+promedios <- c()
+for( i in 1:length(n_obs)){
+  modelos[[i]] <- crossval(datos, "price ~ surface_covered", n_obs = n_obs[i], PMAE, n_muestras=100)
+  promedios[i] <- modelos[[i]]$promedios
+}
+
+plot(n_obs,
+     promedios,
+     main = "Promedio del modelo en función de la cantidad de observaciones",
+     xlab = "Cantidad n_observaciones",
+     ylab = "Promedio",
+     type = "l"
+)
+
+
+```
+El error es bajo cuando se predice con muy pocas muestras, pero eso no significa que sea una buena señal. Acá se cae en un caso de overfitting (aunque no muy agudo), en donde la validación cruzada no indica la realidad. Al hacer solo una predicción (o muy poquitas), se pueden haber memorizado los comportamientos. 
+Lo que se está observando en el gráfico es el promedio, pero éste no parece ser el mejor indicador para este caso. Si se observa la varianza con pocas predicciones, esos valores serán altos en comparación con la varianza con un número de observaciones "más centrales". También, por el otro lado, cuando tenemos muchas predicciones, el valor de la varianza vuelve a aumentar. Como se discutió en clase, no hay una fórmula exacta de la cantidad de observaciones justas para realizar el modelo, pero es importante no caer en los casos antes mencionados.
+Por otro lado, se puede notar que hacia el final del número de observaciones quedan pocos datos para predecir, lo que indica que no se están haciendo bien las tomas, por esa razón el promedio es tan alto.
+
+
+## Punto 7
+```{r}
+modeloPotencias <- list()
+promedios <- c()
+erroresAjuste <- c()
+for(i in 1:8){
+  modelo <- paste("price ~ poly(fondo, ", i, ")", sep = "")
+  modeloPotencias[[i]] <- crossval(datos, modelo, 20, PMAE, 20)
+  promedios[i] <- modeloPotencias[[i]]$promedio
+  erroresAjuste[i] <- PMAE(datos$price, predict(modeloPotencias[[i]]$modelo))
+}
+plot(promedios,
+     type = "o",
+     main = "Error de predicción según potencias del fondo",
+     ylab = "Promedio error",
+     xlab = "Número de potencia"
+)
+plot(promedios,
+     type = "o",
+     main = "Error de predicción según potencias del fondo, solo hasta tercer potencia",
+     ylab = "Promedio error",
+     xlab = "Número de potencia",
+     xlim = c(1,3),
+     ylim = c(promedios[1],promedios[3])
+)
+```
+En el grafico de la predicción, es claro que en la 8va potencia, el error toma un valor muy elevado en comparación al resto. Igualmente, no es el único valor elevado. En el segundo gráfico, realicé una especie de zoom, en donde solo mostré el promedio dentro de las tres primeras potencias, debido a que con más índices, el promedio ya aumentaba considerablemente. Esto da a entender que a medida que la potencia aumenta, el promedio del error aumenta también.
+
+```{r}
+plot(erroresAjuste,
+     type = "o",
+     main = "Error de ajuste según potencias del fondo",
+     ylab = "Error de ajuste",
+     xlab = "Número de potencia"
+     )
+```
+Con respecto al error de ajuste, se nota una disminución del error en las potencias más altas, en donde ahora si se nota un fuerte overfitting.
+
+
+## Punto 8
+```{r}
+library(scales)
+modeloSuperficie <- crossval(datos, "price ~ surface_covered",20,PMAE,100)
+modeloFondo <- crossval(datos, "price ~ fondo",20,PMAE,100)
+modeloSuperficieFondo <- crossval(datos, "price ~ surface_covered + fondo",20,PMAE,100)
+
+ajusteSuperficie <- PMAE(datos$price, predict(modeloSuperficie$modelo))
+ajusteFondo <- PMAE(datos$price, predict(modeloFondo$modelo))
+ajusteSuperficieFondo <- PMAE(datos$price, predict(modeloSuperficieFondo$modelo))
+
+promedioSuperficie <- modeloSuperficie$promedios
+promedioFondo <- modeloFondo$promedios
+promedioSuperficieFondo <- modeloSuperficieFondo$promedios
+
+plot(
+  c(promedioSuperficie, promedioFondo, promedioSuperficieFondo), col = alpha("blue", 0.5), pch=19, 
+  main = "Comparación errores de modelos",
+  ylab= "Errores promedio",
+  xaxt = "n"
+  
+)
+axis(1, at = c(1,2,3), labels = c("Superficie cubierta" , "Fondo", "ambas"))
+points(
+  c(ajusteSuperficie, ajusteFondo, ajusteSuperficieFondo), col= alpha("RED", 0.5), pch = 19
+)
+
+
+legend('topleft', legend = c("Error de predicción", "Error de ajuste"), pch = 19, col = c('blue', 'red'))
+```
+Se nota que en los tres casos, el error de predicción y el de ajuste para cada categoría son similares, y también que ambos errores son considerablemente más grandes en el modelo que solo se utiliza el fondo. El fondo marca que es una muy mala variable, mientras que la superficie cubierta es una buena variable. Por útlimo, el agregado del fondo al modelo de la suoerficie cubierta no presenta un cambio en las predicciones ni en el ajuste del modelo.
+
+## Punto 9
+```{r}
+modelos <- c()
+form <-c()
+variables <- c('surface_covered', 'fondo', 'property_type', 'lon + lat')
+comb <- expand.grid(1:0, 1:0, 1:0, 1:0)
+for(i in 1:16){
+  modelo <- paste(
+    1,
+    if(comb[i,1]) "+ surface_covered" else "",
+    if(comb[i,2]) "+ fondo" else "",
+    if(comb[i,3]) "+ property_type" else "",
+    if(comb[i,4]) "+ lon + lat" else ""
+  )
+    modelos[i]<- modelo
+}
+for( i in 1:16 ){
+  modelo <- 'price ~'
+  const <- TRUE
+  for( j in 1:4 ){
+    if(comb[i, j] == 1){
+      if(!const)
+        modelo <- paste(modelo, '+')
+      modelo <- paste(modelo, variables[j])
+      const <- FALSE
+    }
+  }
+  if(const) modelo <- paste(modelo, 1)
+  form[i] <- modelo
+}
+## Reeinvento crossval porque hay muy poca data de casas y PH en el dataset y necesito sacarlas para que el modelo siga funcionando
+crossval <- function(datos, modelo, n_obs, fun_error, n_muestras = 10){
+  errores <-c()
+  casaYPH<- c(which(datos$property_type == 'Casa'), which(datos$property_type == 'PH'))
+  for(i in 1:n_muestras){
+    datosAzar <- sample(nrow(datos), nrow(datos)-n_obs)
+    datosAzar <- c(datosAzar, casaYPH)
+    LM <- lm(formula(modelo), data = datos[datosAzar, ])
+    errores[i] <- fun_error(datos[-datosAzar, as.character(formula(modelo)[[2]])], predict(LM, newdata = datos[-datosAzar,]))
+  }
+  LM <- lm(formula(modelo), data = datos)
+  lista <- list(errores = errores, promedios = mean(errores), varianza =  var(errores), formula = formula(modelo), modelo = LM)
+  return(lista)
+}
+
+lista <- list()
+errores <-c()
+ajustes <- c()
+for(i in 1:16){
+  lista[[i]]<- crossval(datos,form[i],20,PMAE, 100)
+  errores[i]<- lista[[i]]$promedios
+  ajustes[i]<- PMAE(datos$price, predict(lista[[i]]$modelo))
+}
+
+lista [[which.min(errores)]]$formula
+lista [[which.max(errores)]]$formula
+
+min(errores)
+max(errores)
+
+lista [[which.min(ajustes)]]$formula
+lista [[which.max(ajustes)]]$formula
+
+min(ajustes)
+max(ajustes)
+
+
+```
+El que tiene el menor error de prediccion es la combinación entre la superficie cubierta y la ubicación, con un valor de 0.180 y el que tiene el mayor error de predicción es el de tipo de propiedad, lo que era esperable, con un valor de 0.324
+Por último, con respecto al error de ajuste, el mínimo se corresponde al de superficie cubierta, fondo, tipo y ubicación, con un valor de 0.173.
+
+Agregar mas variables no es el unico factor que mejora la predicción, sino que la variable que esté usando en el modelo también hace un cambio.
+
+
+
